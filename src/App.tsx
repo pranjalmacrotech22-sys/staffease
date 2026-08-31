@@ -1881,6 +1881,35 @@ function SuperAdminCompaniesPage({ onImpersonate }: { onImpersonate: (admin: { i
     }
   };
 
+  const handleDeleteAdmin = async (adminAccount: any) => {
+    if (!confirm(`Are you sure you want to delete Admin account "${adminAccount.email}"?\n\nThis record will be moved to the Super Admin Recycle Bin.`)) return;
+
+    setLoading(true);
+    const res = await softDeleteRecord(
+      'profiles',
+      adminAccount.id,
+      adminAccount.id,
+      'super_admin',
+      'super_admin',
+      adminAccount.email || adminAccount.name
+    );
+
+    if (!res.success) {
+      alert(`Failed to delete admin account: ${res.error}`);
+    } else {
+      await auditLog(adminAccount.id, 'super_admin.delete_admin', adminAccount.id, adminAccount.email, {
+        admin_email: adminAccount.email,
+        soft_deleted: true,
+      });
+      try {
+        const map = getLocalStatusMap();
+        delete map[adminAccount.id];
+        localStorage.setItem('staffease_company_status_map', JSON.stringify(map));
+      } catch {}
+    }
+    await loadAdmins();
+  };
+
   const filtered = admins.filter(a => {
     const matchesSearch =
       a.email?.toLowerCase().includes(search.toLowerCase()) ||
@@ -2048,6 +2077,24 @@ function SuperAdminCompaniesPage({ onImpersonate }: { onImpersonate: (admin: { i
                             <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1={15} y1={12} x2={3} y2={12} />
                           </svg>
                           <span>Impersonate Admin</span>
+                        </button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => handleDeleteAdmin(a)}
+                          title="Delete Admin Account (Soft Delete to Recycle Bin)"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '6px 10px',
+                            color: '#ef4444',
+                            borderColor: '#fca5a5',
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
