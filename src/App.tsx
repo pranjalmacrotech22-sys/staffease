@@ -6320,7 +6320,9 @@ function PayrollPage({ adminId }: { adminId: string }) {
   // ── helpers ──
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (employees.length === 0) {
+      setLoading(true);
+    }
     // Padded ±1 day (UTC storage vs. local day — see ymd/dayKey)
     const monthStart = filterMode === 'range' ? `${startDate}T00:00:00` : ymd(new Date(selYear, selMonth - 1, 0)) + 'T00:00:00';
     const monthEnd = filterMode === 'range' ? `${endDate}T23:59:59` : ymd(new Date(selYear, selMonth, 1)) + 'T23:59:59';
@@ -6733,10 +6735,7 @@ function PayrollPage({ adminId }: { adminId: string }) {
         </div>
       </div>
 
-      <div className="card" style={{ opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s ease', position: 'relative', overflow: 'hidden' }}>
-        {loading && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #3b82f6, #6366f1, #3b82f6)', zIndex: 10 }} />
-        )}
+      <div className="card">
         {loading && employees.length === 0 ? (
           <div style={{ padding: 50, textAlign: 'center' }}><div className="spinner" /></div>
         ) : (
