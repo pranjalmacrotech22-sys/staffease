@@ -528,30 +528,39 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
 
   const gross = salary?.monthly_salary ?? 0;
   let dailyRate = 0;
-  let basePay = 0;
   let workingDays = dim;
 
   if (calcMethod === 'fixed_30') {
     // Method 1: Fixed 30-Day Calendar ('fixed_30')
     workingDays = 30;
     dailyRate = gross > 0 ? gross / 30 : 0;
-    basePay = Math.max(0, gross - (daysAbsent * dailyRate));
   } else if (calcMethod === 'actual_calendar') {
     // Method 3: Actual Calendar Day ('actual_calendar')
     workingDays = dim;
     dailyRate = gross > 0 ? gross / dim : 0;
-    basePay = Math.max(0, gross - (daysAbsent * dailyRate));
   } else {
     // Method 2: Working-Day Based ('working_day')
     const totalHolidaysInMonth = nonSandwichedHolidays + nonSandwichedWeeklyOffs;
     const totalWorkingDays = Math.max(1, dim - totalHolidaysInMonth - leavesAllotted);
     workingDays = totalWorkingDays;
     dailyRate = gross > 0 ? gross / totalWorkingDays : 0;
-    basePay = Math.min(gross, dailyRate * (daysPresent + paidLeaveDays));
   }
 
   const perDay = dailyRate;
-  const unpaidLeaveDeduction = Math.max(0, gross - basePay);
+  const excessAbsentDays = Math.max(0, daysAbsent - leavesAllotted);
+  const unpaidLeaveDeduction = excessAbsentDays * dailyRate;
+
+  let basePay = 0;
+  const isCurrentMonth = (year === currentYear && month === currentMonth);
+
+  if (isCurrentMonth && maxDayToEvaluate < dim) {
+    // In-progress current month: Base pay is earned pay for present/payable days up to today
+    const earnedDays = daysPresent + paidLeaveDays + nonSandwichedHolidays + nonSandwichedWeeklyOffs;
+    basePay = Math.min(gross, dailyRate * earnedDays);
+  } else {
+    // Completed full month: Base pay is gross minus actual absent deductions
+    basePay = Math.max(0, gross - unpaidLeaveDeduction);
+  }
 
   // Shift length in minutes derived from emp.shift_start and emp.shift_end (supporting overnight shifts)
   let sEndMins = HHMM(emp.shift_end);
