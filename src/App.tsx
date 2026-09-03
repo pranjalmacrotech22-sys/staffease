@@ -389,6 +389,8 @@ interface PayrollInput {
   year: number;
   month: number;
   calcMethod?: 'fixed_30' | 'working_day' | 'actual_calendar';
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
 function calculateSalarySlip(input: PayrollInput): SalarySlip {
@@ -6292,6 +6294,9 @@ function PayrollPage({ adminId }: { adminId: string }) {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1);   // 1-12
   const [selYear, setSelYear] = useState(now.getFullYear());
+  const [filterMode, setFilterMode] = useState<'month' | 'range'>('month');
+  const [startDate, setStartDate] = useState(ymd(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [endDate, setEndDate] = useState(ymd(now));
   const [salaries, setSalaries] = useState<EmployeeSalary[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendMap, setAttendMap] = useState<Record<string, Set<string>>>({});  // empId → set of dates present
@@ -6317,8 +6322,8 @@ function PayrollPage({ adminId }: { adminId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     // Padded ±1 day (UTC storage vs. local day — see ymd/dayKey)
-    const monthStart = ymd(new Date(selYear, selMonth - 1, 0)) + 'T00:00:00';
-    const monthEnd = ymd(new Date(selYear, selMonth, 1)) + 'T23:59:59';
+    const monthStart = filterMode === 'range' ? `${startDate}T00:00:00` : ymd(new Date(selYear, selMonth - 1, 0)) + 'T00:00:00';
+    const monthEnd = filterMode === 'range' ? `${endDate}T23:59:59` : ymd(new Date(selYear, selMonth, 1)) + 'T23:59:59';
     const monthPrefix = `${selYear}-${String(selMonth).padStart(2, '0')}`;
 
     const [sr, er, ar, lr, hr, ehr, lvr, wor, pr] = await Promise.all([
@@ -6347,22 +6352,30 @@ function PayrollPage({ adminId }: { adminId: string }) {
       setCalcMethod(pr.data.salary_calc_method as any);
     }
 
-    // Build attendance map: empId → unique check-in dates this month
+    // Build attendance map: empId → unique check-in dates this month or in custom range
     const am: Record<string, Set<string>> = {};
     for (const rec of (ar.data ?? [])) {
       if (rec.punch_type !== 'check_in') continue;
       const date = dayKey(rec.timestamp);
-      if (date.slice(0, 7) !== monthPrefix) continue;
+      if (filterMode === 'range') {
+        if (date < startDate || date > endDate) continue;
+      } else {
+        if (date.slice(0, 7) !== monthPrefix) continue;
+      }
       if (!am[rec.employee_id]) am[rec.employee_id] = new Set();
       am[rec.employee_id].add(date);
     }
     setAttendMap(am);
 
-    // Build overtime calculations & total worked hours: empId → monthly minutes
+    // Build overtime calculations & total worked hours: empId → monthly or range minutes
     const recAgg = new Map<string, { first: number; last: number; hasIn: boolean; hasOut: boolean }>();
     for (const r of (ar.data ?? [])) {
       const date = dayKey(r.timestamp);
-      if (date.slice(0, 7) !== monthPrefix) continue;
+      if (filterMode === 'range') {
+        if (date < startDate || date > endDate) continue;
+      } else {
+        if (date.slice(0, 7) !== monthPrefix) continue;
+      }
       const key = r.employee_id + '|' + date;
       const t = new Date(r.timestamp);
       const mins = t.getHours() * 60 + t.getMinutes();
@@ -6429,7 +6442,7 @@ function PayrollPage({ adminId }: { adminId: string }) {
     setWeeklyOffs((wor.data ?? []) as WeeklyOffDay[]);
 
     setLoading(false);
-  }, [adminId, selMonth, selYear]);
+  }, [adminId, selMonth, selYear, filterMode, startDate, endDate]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -6441,7 +6454,7 @@ function PayrollPage({ adminId }: { adminId: string }) {
     }
   };
 
-  const dateLimit = ymd(new Date(selYear, selMonth, 0)); // last day of the selected month
+  const dateLimit = filterMode === 'range' ? endDate : ymd(new Date(selYear, selMonth, 0)); // cutoff date for active salary
   const salaryMap: Record<string, EmployeeSalary> = {};
   for (const e of employees) {
     const active = getActiveSalary(salaries, e.id, dateLimit);
@@ -6470,8 +6483,10 @@ function PayrollPage({ adminId }: { adminId: string }) {
       year: selYear,
       month: selMonth,
       calcMethod,
+      customStartDate: filterMode === 'range' ? startDate : undefined,
+      customEndDate: filterMode === 'range' ? endDate : undefined,
     });
-  }, [salaryMap, attendMap, leavesMap, leaveReqs, overtimeMap, lateMap, shortageMap, workedMinutesMap, holidays, weeklyOffs, empHolidays, selMonth, selYear, calcMethod]);
+  }, [salaryMap, attendMap, leavesMap, leaveReqs, overtimeMap, lateMap, shortageMap, workedMinutesMap, holidays, weeklyOffs, empHolidays, selMonth, selYear, calcMethod, filterMode, startDate, endDate]);
 
   const filtered = employees.filter(e =>
     e.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -6497,20 +6512,77 @@ function PayrollPage({ adminId }: { adminId: string }) {
           <div className="section-title">Payroll Management</div>
           <div className="section-sub">Attendance-based net pay calculation</div>
         </div>
-        <div className="flex gap-2 items-center payroll-controls">
+        <div className="flex gap-2 items-center payroll-controls" style={{ flexWrap: 'wrap' }}>
           <div className="search-wrap">
             {I.search}
             <input className="form-input search-input" placeholder="Search employee…"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="form-input" style={{ width: 'auto', paddingRight: 28 }}
-            value={selMonth} onChange={e => setSelMonth(Number(e.target.value))}>
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-          <select className="form-input" style={{ width: 'auto', paddingRight: 28 }}
-            value={selYear} onChange={e => setSelYear(Number(e.target.value))}>
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+
+          {filterMode === 'month' ? (
+            <>
+              <select className="form-input" style={{ width: 'auto', paddingRight: 28 }}
+                value={selMonth} onChange={e => {
+                  const m = Number(e.target.value);
+                  setSelMonth(m);
+                  setStartDate(ymd(new Date(selYear, m - 1, 1)));
+                  setEndDate(ymd(new Date(selYear, m, 0)));
+                }}>
+                {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+              </select>
+              <select className="form-input" style={{ width: 'auto', paddingRight: 28 }}
+                value={selYear} onChange={e => {
+                  const y = Number(e.target.value);
+                  setSelYear(y);
+                  setStartDate(ymd(new Date(y, selMonth - 1, 1)));
+                  setEndDate(ymd(new Date(y, selMonth, 0)));
+                }}>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: '1px solid #cbd5e1', padding: '3px 8px', borderRadius: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>From:</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 6px', fontSize: 12, height: 32, width: 130 }}
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+              />
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>To:</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 6px', fontSize: 12, height: 32, width: 130 }}
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+              />
+            </div>
+          )}
+
+          <button
+            className="btn btn-outline"
+            style={{
+              whiteSpace: 'nowrap',
+              fontSize: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              borderColor: filterMode === 'range' ? '#2563eb' : '#cbd5e1',
+              background: filterMode === 'range' ? '#eff6ff' : '#ffffff',
+              color: filterMode === 'range' ? '#2563eb' : '#334155',
+              fontWeight: 700
+            }}
+            onClick={() => setFilterMode(filterMode === 'month' ? 'range' : 'month')}
+            title={filterMode === 'month' ? 'Filter by Custom Date Range' : 'Switch to Monthly View'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>{filterMode === 'month' ? '📅 Date Range' : '🗓️ Monthly View'}</span>
+          </button>
+
           <button className="btn btn-outline" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={() => setShowAllotModal(true)}>
             🌿 Allot Leaves
           </button>
