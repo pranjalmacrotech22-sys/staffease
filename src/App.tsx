@@ -6555,7 +6555,12 @@ function PayrollPage({ adminId }: { adminId: string }) {
                 className="form-input"
                 style={{ padding: '4px 6px', fontSize: 12, height: 32, width: 130 }}
                 value={startDate}
-                onChange={e => setStartDate(e.target.value)}
+                max={ymd(new Date())}
+                onChange={e => {
+                  const val = e.target.value;
+                  const maxVal = ymd(new Date());
+                  setStartDate(val > maxVal ? maxVal : val);
+                }}
               />
               <span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>To:</span>
               <input
@@ -6563,7 +6568,12 @@ function PayrollPage({ adminId }: { adminId: string }) {
                 className="form-input"
                 style={{ padding: '4px 6px', fontSize: 12, height: 32, width: 130 }}
                 value={endDate}
-                onChange={e => setEndDate(e.target.value)}
+                max={ymd(new Date())}
+                onChange={e => {
+                  const val = e.target.value;
+                  const maxVal = ymd(new Date());
+                  setEndDate(val > maxVal ? maxVal : val);
+                }}
               />
             </div>
           )}
