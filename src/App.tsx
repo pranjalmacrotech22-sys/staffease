@@ -409,11 +409,29 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
     shortageMinutes = 0,
     year,
     month,
-    calcMethod = 'working_day'
+    calcMethod = 'working_day',
+    customStartDate,
+    customEndDate
   } = input;
 
-  const dim = new Date(year, month, 0).getDate();
   const holSet = new Set([...holidays.map(h => h.date), ...empHolidays]);
+
+  // Build the exact list of date strings (yyyy-mm-dd) to evaluate
+  const dateList: string[] = [];
+  if (customStartDate && customEndDate) {
+    const startDt = new Date(customStartDate + 'T00:00:00');
+    const endDt = new Date(customEndDate + 'T00:00:00');
+    for (let d = new Date(startDt); d <= endDt; d.setDate(d.getDate() + 1)) {
+      dateList.push(ymd(d));
+    }
+  } else {
+    const dimMonth = new Date(year, month, 0).getDate();
+    for (let d = 1; d <= dimMonth; d++) {
+      dateList.push(ymd(new Date(year, month - 1, d)));
+    }
+  }
+
+  const dim = dateList.length;
 
   // Sets of approved paid and unpaid leave dates
   const approvedPaidLeaveDates = new Set<string>();
@@ -432,60 +450,46 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
     }
   });
 
-  // Determine evaluation cutoff day for completed/past days:
-  // - Past months: evaluate all days of the month (maxDayToEvaluate = dim)
-  // - Future months: evaluate 0 days (maxDayToEvaluate = 0)
-  // - Current month: evaluate only completed days up to today's date
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-indexed (1-12)
-  const todayDateNum = now.getDate();
+  const todayStr = ymd(now);
 
-  let maxDayToEvaluate = dim;
-  if (year > currentYear || (year === currentYear && month > currentMonth)) {
-    maxDayToEvaluate = 0;
-  } else if (year === currentYear && month === currentMonth) {
-    maxDayToEvaluate = Math.min(dim, todayDateNum);
-  }
-
-  // Step 1: Map status of every day in the month
+  // Step 1: Map status of every day in dateList
   type DayStatus = 'present' | 'absent' | 'holiday' | 'weekly_off' | 'paid_leave' | 'future';
-  const dayStatusMap: Record<number, DayStatus> = {};
+  const dayStatusMap: Record<string, DayStatus> = {};
 
-  for (let d = 1; d <= dim; d++) {
-    const dt = new Date(year, month - 1, d);
-    const ds = ymd(dt);
+  for (const ds of dateList) {
+    const dt = new Date(ds + 'T00:00:00');
 
-    if (d > maxDayToEvaluate) {
-      // Future date in current/future month -> do NOT count as absent/deduction!
-      dayStatusMap[d] = 'future';
+    if (ds > todayStr) {
+      // Future date -> do NOT count as absent/deduction!
+      dayStatusMap[ds] = 'future';
     } else if (presentDates.has(ds)) {
-      dayStatusMap[d] = 'present';
+      dayStatusMap[ds] = 'present';
     } else if (unpaidLeaveDates.has(ds)) {
-      dayStatusMap[d] = 'absent';
+      dayStatusMap[ds] = 'absent';
     } else if (approvedPaidLeaveDates.has(ds)) {
-      dayStatusMap[d] = 'paid_leave';
+      dayStatusMap[ds] = 'paid_leave';
     } else if (holSet.has(ds)) {
-      dayStatusMap[d] = 'holiday';
+      dayStatusMap[ds] = 'holiday';
     } else if (weeklyOffs.has(toWeekdayNumber(dt))) {
-      dayStatusMap[d] = 'weekly_off';
+      dayStatusMap[ds] = 'weekly_off';
     } else {
-      dayStatusMap[d] = 'absent';
+      dayStatusMap[ds] = 'absent';
     }
   }
 
-  // Step 2: Sandwich Leave Policy Evaluation
-  // Any paid non-working day ('holiday', 'weekly_off', 'paid_leave') loses its paid status
-  // if nearest working day before is 'absent' AND nearest working day after is 'absent'.
-  const finalStatusMap: Record<number, DayStatus> = { ...dayStatusMap };
+  // Step 2: Sandwich Leave Policy Evaluation over dateList
+  const finalStatusMap: Record<string, DayStatus> = { ...dayStatusMap };
   let sandwichedCount = 0;
 
-  for (let d = 1; d <= maxDayToEvaluate; d++) {
-    const initStatus = dayStatusMap[d];
-    if (initStatus === 'holiday' || initStatus === 'weekly_off' || initStatus === 'paid_leave') {
+  for (let i = 0; i < dateList.length; i++) {
+    const ds = dateList[i];
+    const initStatus = dayStatusMap[ds];
+
+    if (ds <= todayStr && (initStatus === 'holiday' || initStatus === 'weekly_off' || initStatus === 'paid_leave')) {
       let prevStatus: 'present' | 'absent' | null = null;
-      for (let b = d - 1; b >= 1; b--) {
-        const s = dayStatusMap[b];
+      for (let b = i - 1; b >= 0; b--) {
+        const s = dayStatusMap[dateList[b]];
         if (s === 'present' || s === 'absent') {
           prevStatus = s;
           break;
@@ -494,8 +498,8 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
       if (!prevStatus) prevStatus = 'absent';
 
       let nextStatus: 'present' | 'absent' | null = null;
-      for (let f = d + 1; f <= maxDayToEvaluate; f++) {
-        const s = dayStatusMap[f];
+      for (let f = i + 1; f < dateList.length; f++) {
+        const s = dayStatusMap[dateList[f]];
         if (s === 'present' || s === 'absent') {
           nextStatus = s;
           break;
@@ -504,7 +508,7 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
       if (!nextStatus) nextStatus = 'absent';
 
       if (prevStatus === 'absent' && nextStatus === 'absent') {
-        finalStatusMap[d] = 'absent';
+        finalStatusMap[ds] = 'absent';
         sandwichedCount++;
       }
     }
@@ -518,8 +522,8 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   let nonSandwichedWeeklyOffs = 0;
   let futureDaysCount = 0;
 
-  for (let d = 1; d <= dim; d++) {
-    const st = finalStatusMap[d];
+  for (const ds of dateList) {
+    const st = finalStatusMap[ds];
     if (st === 'present') daysPresent++;
     else if (st === 'absent') daysAbsent++;
     else if (st === 'paid_leave') paidLeaveDays++;
@@ -529,23 +533,22 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   }
 
   const gross = salary?.monthly_salary ?? 0;
+  const fullMonthDays = new Date(year, month, 0).getDate() || 30;
   let dailyRate = 0;
   let workingDays = dim;
 
   if (calcMethod === 'fixed_30') {
-    // Method 1: Fixed 30-Day Calendar ('fixed_30')
-    workingDays = 30;
+    workingDays = customStartDate && customEndDate ? dim : 30;
     dailyRate = gross > 0 ? gross / 30 : 0;
   } else if (calcMethod === 'actual_calendar') {
-    // Method 3: Actual Calendar Day ('actual_calendar')
     workingDays = dim;
-    dailyRate = gross > 0 ? gross / dim : 0;
+    dailyRate = gross > 0 ? gross / fullMonthDays : 0;
   } else {
-    // Method 2: Working-Day Based ('working_day')
+    // Working-Day Based ('working_day')
     const totalHolidaysInMonth = nonSandwichedHolidays + nonSandwichedWeeklyOffs;
     const totalWorkingDays = Math.max(1, dim - totalHolidaysInMonth - leavesAllotted);
     workingDays = totalWorkingDays;
-    dailyRate = gross > 0 ? gross / totalWorkingDays : 0;
+    dailyRate = gross > 0 ? gross / Math.max(1, (customStartDate && customEndDate ? dim : fullMonthDays) - totalHolidaysInMonth) : 0;
   }
 
   const perDay = dailyRate;
@@ -553,15 +556,17 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   const unpaidLeaveDeduction = excessAbsentDays * dailyRate;
 
   let basePay = 0;
-  const isCurrentMonth = (year === currentYear && month === currentMonth);
-
-  if (isCurrentMonth && maxDayToEvaluate < dim) {
-    // In-progress current month: Base pay is earned pay for present/payable days up to today
+  if (customStartDate && customEndDate) {
     const earnedDays = daysPresent + paidLeaveDays + nonSandwichedHolidays + nonSandwichedWeeklyOffs;
     basePay = Math.min(gross, dailyRate * earnedDays);
   } else {
-    // Completed full month: Base pay is gross minus actual absent deductions
-    basePay = Math.max(0, gross - unpaidLeaveDeduction);
+    const isCurrentMonth = (year === now.getFullYear() && month === (now.getMonth() + 1));
+    if (isCurrentMonth && todayStr.slice(0, 7) === `${year}-${String(month).padStart(2, '0')}`) {
+      const earnedDays = daysPresent + paidLeaveDays + nonSandwichedHolidays + nonSandwichedWeeklyOffs;
+      basePay = Math.min(gross, dailyRate * earnedDays);
+    } else {
+      basePay = Math.max(0, gross - unpaidLeaveDeduction);
+    }
   }
 
   // Shift length in minutes derived from emp.shift_start and emp.shift_end (supporting overnight shifts)
