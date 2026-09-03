@@ -541,14 +541,14 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
     workingDays = customStartDate && customEndDate ? dim : 30;
     dailyRate = gross > 0 ? gross / 30 : 0;
   } else if (calcMethod === 'actual_calendar') {
-    workingDays = dim;
+    workingDays = customStartDate && customEndDate ? dim : fullMonthDays;
     dailyRate = gross > 0 ? gross / fullMonthDays : 0;
   } else {
     // Working-Day Based ('working_day')
     const totalHolidaysInMonth = nonSandwichedHolidays + nonSandwichedWeeklyOffs;
     const totalWorkingDays = Math.max(1, dim - totalHolidaysInMonth - leavesAllotted);
-    workingDays = totalWorkingDays;
-    dailyRate = gross > 0 ? gross / Math.max(1, (customStartDate && customEndDate ? dim : fullMonthDays) - totalHolidaysInMonth) : 0;
+    workingDays = customStartDate && customEndDate ? dim : totalWorkingDays;
+    dailyRate = gross > 0 ? gross / Math.max(1, fullMonthDays - totalHolidaysInMonth) : 0;
   }
 
   const perDay = dailyRate;
