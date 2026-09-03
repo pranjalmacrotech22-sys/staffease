@@ -430,15 +430,34 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
     }
   });
 
+  // Determine evaluation cutoff day for completed/past days:
+  // - Past months: evaluate all days of the month (maxDayToEvaluate = dim)
+  // - Future months: evaluate 0 days (maxDayToEvaluate = 0)
+  // - Current month: evaluate only completed days up to today's date
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-indexed (1-12)
+  const todayDateNum = now.getDate();
+
+  let maxDayToEvaluate = dim;
+  if (year > currentYear || (year === currentYear && month > currentMonth)) {
+    maxDayToEvaluate = 0;
+  } else if (year === currentYear && month === currentMonth) {
+    maxDayToEvaluate = Math.min(dim, todayDateNum);
+  }
+
   // Step 1: Map status of every day in the month
-  type DayStatus = 'present' | 'absent' | 'holiday' | 'weekly_off' | 'paid_leave';
+  type DayStatus = 'present' | 'absent' | 'holiday' | 'weekly_off' | 'paid_leave' | 'future';
   const dayStatusMap: Record<number, DayStatus> = {};
 
   for (let d = 1; d <= dim; d++) {
     const dt = new Date(year, month - 1, d);
     const ds = ymd(dt);
 
-    if (presentDates.has(ds)) {
+    if (d > maxDayToEvaluate) {
+      // Future date in current/future month -> do NOT count as absent/deduction!
+      dayStatusMap[d] = 'future';
+    } else if (presentDates.has(ds)) {
       dayStatusMap[d] = 'present';
     } else if (unpaidLeaveDates.has(ds)) {
       dayStatusMap[d] = 'absent';
@@ -459,7 +478,7 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   const finalStatusMap: Record<number, DayStatus> = { ...dayStatusMap };
   let sandwichedCount = 0;
 
-  for (let d = 1; d <= dim; d++) {
+  for (let d = 1; d <= maxDayToEvaluate; d++) {
     const initStatus = dayStatusMap[d];
     if (initStatus === 'holiday' || initStatus === 'weekly_off' || initStatus === 'paid_leave') {
       let prevStatus: 'present' | 'absent' | null = null;
@@ -473,7 +492,7 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
       if (!prevStatus) prevStatus = 'absent';
 
       let nextStatus: 'present' | 'absent' | null = null;
-      for (let f = d + 1; f <= dim; f++) {
+      for (let f = d + 1; f <= maxDayToEvaluate; f++) {
         const s = dayStatusMap[f];
         if (s === 'present' || s === 'absent') {
           nextStatus = s;
@@ -495,6 +514,7 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   let paidLeaveDays = 0;
   let nonSandwichedHolidays = 0;
   let nonSandwichedWeeklyOffs = 0;
+  let futureDaysCount = 0;
 
   for (let d = 1; d <= dim; d++) {
     const st = finalStatusMap[d];
@@ -503,6 +523,7 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
     else if (st === 'paid_leave') paidLeaveDays++;
     else if (st === 'holiday') nonSandwichedHolidays++;
     else if (st === 'weekly_off') nonSandwichedWeeklyOffs++;
+    else if (st === 'future') futureDaysCount++;
   }
 
   const gross = salary?.monthly_salary ?? 0;
