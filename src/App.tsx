@@ -532,9 +532,12 @@ function calculateSalarySlip(input: PayrollInput): SalarySlip {
   const perDay = dailyRate;
   const unpaidLeaveDeduction = Math.max(0, gross - basePay);
 
-  // Shift length in minutes derived from emp.shift_start and emp.shift_end
-  const shiftLenMins = Math.max(1, HHMM(emp.shift_end) - HHMM(emp.shift_start)) || 540;
-  const perMinute = perDay / shiftLenMins;
+  // Shift length in minutes derived from emp.shift_start and emp.shift_end (supporting overnight shifts)
+  let sEndMins = HHMM(emp.shift_end);
+  const sStartMins = HHMM(emp.shift_start);
+  if (sEndMins <= sStartMins) sEndMins += 24 * 60;
+  const shiftLenMins = Math.max(300, sEndMins - sStartMins) || 480;
+  const perMinute = shiftLenMins > 0 ? perDay / shiftLenMins : 0;
 
   const lateCutDeduction = lateMinutes * perMinute;
   const underworkDeduction = shortageMinutes * perMinute;
@@ -6349,8 +6352,9 @@ function PayrollPage({ adminId }: { adminId: string }) {
       const emp = empMap.get(id);
       if (emp) {
         const shiftStartMins = HHMM(emp.shift_start || '09:00');
-        const shiftEndMins = HHMM(emp.shift_end || '17:00');
-        const shiftLen = Math.max(0, shiftEndMins - shiftStartMins) || 480;
+        let shiftEndMins = HHMM(emp.shift_end || '17:00');
+        if (shiftEndMins <= shiftStartMins) shiftEndMins += 24 * 60;
+        const shiftLen = Math.max(300, shiftEndMins - shiftStartMins) || 480;
 
         let worked = 0;
         if (v.hasIn && v.hasOut) {
