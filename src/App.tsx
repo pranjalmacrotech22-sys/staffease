@@ -6733,8 +6733,13 @@ function PayrollPage({ adminId }: { adminId: string }) {
         </div>
       </div>
 
-      {loading ? <div className="loader-overlay"><div className="spinner" /></div>
-        : <div className="card">
+      <div className="card" style={{ opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s ease', position: 'relative', overflow: 'hidden' }}>
+        {loading && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #3b82f6, #6366f1, #3b82f6)', zIndex: 10 }} />
+        )}
+        {loading && employees.length === 0 ? (
+          <div style={{ padding: 50, textAlign: 'center' }}><div className="spinner" /></div>
+        ) : (
           <div className="table-wrap">
             <table>
               <thead><tr>
@@ -6865,7 +6870,8 @@ function PayrollPage({ adminId }: { adminId: string }) {
               </tbody>
             </table>
           </div>
-        </div>}
+        )}
+      </div>
 
       {/* Salary Slip Drawer */}
       {slip && (
