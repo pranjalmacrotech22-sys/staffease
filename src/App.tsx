@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import './index.css';
-import macrotechLogo from './assets/image.png';
+const macrotechLogo = '/macrotech-logo.png';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Session { user: { id: string; email: string } }
