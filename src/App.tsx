@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import './index.css';
+import macrotechLogo from './assets/image.png';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Session { user: { id: string; email: string } }
@@ -1084,7 +1085,7 @@ function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
 
         {/* Support & Contact Card */}
         <div style={{
-          marginTop: 36,
+          marginTop: 32,
           width: '100%',
           maxWidth: 320,
           background: 'rgba(255, 255, 255, 0.1)',
@@ -1095,11 +1096,18 @@ function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
           position: 'relative',
           zIndex: 1
         }}>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'rgba(255,255,255,0.7)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+            <img src={macrotechLogo} alt="Macrotech Softwares Logo" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'contain', background: '#ffffff', padding: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.2px' }}>Macrotech Softwares</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>Developed & Maintained</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'rgba(255,255,255,0.7)', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>
-            Contact & Support
+            Support & Contact
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, fontWeight: 500 }}>
             <a href="mailto:contact@macrotechsoftwares.com" style={{ color: '#ffffff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1449,7 +1457,10 @@ function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
           </div>
 
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: 12, color: '#64748b' }}>
-            <div style={{ fontWeight: 600, color: '#475569', marginBottom: 8 }}>Need Support? Contact Us</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
+              <img src={macrotechLogo} alt="Macrotech Softwares Logo" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'contain' }} />
+              <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 12.5 }}>Developed by Macrotech Softwares</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <a href="mailto:contact@macrotechsoftwares.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
@@ -2998,6 +3009,13 @@ function Sidebar({ page, setPage, email, onLogout, isOpen, onClose, isSuperAdmin
           >
             {I.logout} Sign out
           </button>
+
+          <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <img src={macrotechLogo} alt="Macrotech Logo" style={{ width: 16, height: 16, borderRadius: 4, objectFit: 'contain' }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Developed by Macrotech Softwares</span>
+            </div>
+          </div>
         </div>
       </aside>
     </>
